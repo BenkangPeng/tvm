@@ -22,6 +22,8 @@
  * \file unroll_loop.cc
  */
 // Unrolls the loop as in Halide pipeline.
+#include "unroll_loop.h"
+
 #include <tvm/arith/analyzer.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/tir/expr.h>
@@ -38,37 +40,6 @@
 
 namespace tvm {
 namespace tir {
-
-struct UnrollLoopConfigNode : public tvm::AttrsNode<UnrollLoopConfigNode> {
-  int auto_max_step;
-  int auto_max_depth;
-  int auto_max_extent;
-  int explicit_unroll;
-  int unroll_local_access;
-
-  TVM_DECLARE_ATTRS(UnrollLoopConfigNode, "tir.transform.UnrollLoopConfig") {
-    TVM_ATTR_FIELD(auto_max_step)
-        .describe("Threshold of number of steps in the loop to be automatically unrolled")
-        .set_default(0);
-    TVM_ATTR_FIELD(auto_max_depth)
-        .describe("The maximum nested level of loops that can be automatically unrolled.")
-        .set_default(8);
-    TVM_ATTR_FIELD(auto_max_extent)
-        .describe("The maximum extent of loop that will be unrolled.")
-        .set_default(0);
-    TVM_ATTR_FIELD(explicit_unroll)
-        .describe("Whether to explicitly unroll the loop instead of setting a pragma")
-        .set_default(true);
-    TVM_ATTR_FIELD(unroll_local_access)
-        .describe("Whether to always unroll local access")
-        .set_default(false);
-  }
-};
-
-class UnrollLoopConfig : public Attrs {
- public:
-  TVM_DEFINE_NOTNULLABLE_OBJECT_REF_METHODS(UnrollLoopConfig, Attrs, UnrollLoopConfigNode);
-};
 
 TVM_REGISTER_NODE_TYPE(UnrollLoopConfigNode);
 TVM_REGISTER_PASS_CONFIG_OPTION("tir.UnrollLoop", UnrollLoopConfig);
