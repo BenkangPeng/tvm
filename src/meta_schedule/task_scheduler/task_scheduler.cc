@@ -163,6 +163,8 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
         ctx->space_generator.value()->GenerateDesignSpace(ctx->mod.value());
     TVM_PY_LOG(INFO, ctx->logger) << "Total " << design_spaces.size()
                                   << " design space(s) generated";
+    TVM_PY_LOG(INFO, this->logger)
+        << "Total " << design_spaces.size() << " design space(aka. sketches) generated";
     for (int i = 0, n = design_spaces.size(); i < n; ++i) {
       tir::Schedule sch = design_spaces[i];
       tir::Trace trace = sch->trace().value();
@@ -177,6 +179,7 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
 
   int num_trials_already = 0;
   for (int task_id; num_trials_already < max_trials_global && (task_id = NextTaskId()) != -1;) {
+    Timer task_timer;
     TVM_PY_LOG(INFO, this->logger)
         << "TaskScheduler picks Task #" << task_id << ": " << tasks_[task_id]->ctx->task_name;
     TaskRecordNode* task = tasks_[task_id].get();
@@ -186,14 +189,40 @@ void TaskSchedulerNode::Tune(Array<TuneContext> ctxs, Array<FloatImm> task_weigh
       TerminateTask(task_id);
       continue;
     }
+    /// Generate cnadidates
+    Timer timer;
     if (Optional<Array<MeasureCandidate>> candidates = task->measure_candidates =
             task->ctx->search_strategy.value()->GenerateMeasureCandidates()) {
       int num_candidates = candidates.value().size();
       num_trials_already += num_candidates;
+      int64_t generate_candidates_cost = timer.elapsed();
+      TVM_PY_LOG(INFO, this->logger) << "Cost " << generate_candidates_cost << " ms to generate "
+                                     << num_candidates << " candidate(s)";
       TVM_PY_LOG(INFO, this->logger) << "Sending " << num_candidates << " sample(s) to builder";
+      timer.reset();
       SendToBuilder(task, builder);
+      int64_t build_candidates_cost = timer.elapsed();
+      TVM_PY_LOG(INFO, this->logger) << "Cost " << build_candidates_cost << " ms to build "
+                                     << num_candidates << " candidate(s)";
       TVM_PY_LOG(INFO, this->logger) << "Sending " << num_candidates << " sample(s) to runner";
+      timer.reset();
       SendToRunner(task, runner);
+      int64_t run_candidates_cost = timer.elapsed();
+      TVM_PY_LOG(INFO, this->logger)
+          << "Cost " << run_candidates_cost << " ms to run " << num_candidates << " candidate(s)";
+      /// Execution time Summary
+      int64_t total_cost = task_timer.elapsed();
+      TVM_PY_LOG(INFO, this->logger) << "##########Execution Time Summary##########";
+      TVM_PY_LOG(INFO, this->logger) << "Task #" << task_id << " cost " << total_cost << " ms ";
+      TVM_PY_LOG(INFO, this->logger)
+          << "  - Generate " << num_candidates << " candidate(s): " << generate_candidates_cost
+          << " ms " << static_cast<float>(generate_candidates_cost) / total_cost;
+      TVM_PY_LOG(INFO, this->logger)
+          << "  - Build " << num_candidates << " candidate(s): " << build_candidates_cost << " ms "
+          << static_cast<float>(build_candidates_cost) / total_cost;
+      TVM_PY_LOG(INFO, this->logger)
+          << "  - Run " << num_candidates << " candidate(s): " << run_candidates_cost << " ms "
+          << static_cast<float>(run_candidates_cost) / total_cost;
     } else {
       TerminateTask(task_id);
     }

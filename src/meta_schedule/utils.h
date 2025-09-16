@@ -43,6 +43,7 @@
 #include <tvm/tir/transform.h>
 
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -55,6 +56,7 @@
 #include "../support/utils.h"
 #include "../tir/schedule/primitive.h"
 #include "../tir/schedule/utils.h"
+#include "tvm/runtime/device_api.h"
 
 #define TVM_PY_LOG(logging_level, logger)                                \
   ::tvm::meta_schedule::PyLogMessage(__FILE__, __LINE__, logger,         \
@@ -116,6 +118,27 @@ class PyLogMessage {
   std::ostringstream stream_;
   PackedFunc logger_;
   Level logging_level_;
+};
+
+/*!
+ * \brief A helper class for measuring execution time of code blocks
+ */
+class Timer {
+ public:
+  Timer() : start_(std::chrono::high_resolution_clock::now()) {}
+
+  /// reset the timer
+  void reset() { start_ = std::chrono::high_resolution_clock::now(); }
+
+  /// get elapsed time(milliseconds by default)
+  template <typename Unit = std::chrono::milliseconds>
+  int64_t elapsed() const {
+    auto end = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<Unit>(end - start_).count();
+  }
+
+ private:
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_;
 };
 
 /*!
